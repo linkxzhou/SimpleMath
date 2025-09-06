@@ -5,6 +5,7 @@ import ChatPanel from '@/components/ChatPanel.vue'
 import AnimationPanel from '@/components/AnimationPanel.vue'
 import SettingsModal from '@/components/SettingsModal.vue'
 import { useSettingsStore } from '@/stores/settings'
+import { useTheme } from '@/composables/useTheme'
 
 const settingsStore = useSettingsStore()
 
@@ -15,14 +16,17 @@ onMounted(() => {
 </script>
 
 <template>
-  <div id="app" class="h-screen bg-gray-50 flex flex-col">
+  <div 
+    id="app" 
+    class="h-screen flex flex-col bg-background text-foreground"
+  >
     <!-- 顶部导航栏 -->
     <HeaderNav />
     
     <!-- 主要内容区域 -->
     <div class="flex-1 flex flex-col lg:flex-row overflow-hidden">
       <!-- 左侧对话面板 -->
-      <div class="w-full lg:w-2/5 h-1/2 lg:h-full border-b lg:border-b-0 lg:border-r border-gray-200">
+      <div class="w-full lg:w-2/5 h-1/2 lg:h-full border-b lg:border-b-0 lg:border-r" style="border-color: var(--border)">
         <ChatPanel />
       </div>
       

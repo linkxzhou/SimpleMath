@@ -302,3 +302,6 @@ CMD ["npm", "run", "server"]
 ---
 
 **SimpleMath** - 让数学变得生动有趣！ 🎨✨
+
+## 参考
+（1）https://github.com/JazonJiao/Manim.js
