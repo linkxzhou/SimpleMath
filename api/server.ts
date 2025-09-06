@@ -61,7 +61,6 @@ function generateHTML(code: string, width: number = 800, height: number = 800): 
         }
         main {
             border: 1px solid #ccc;
-            overflow: hidden;
             box-shadow: 0 4px 8px rgba(0,0,0,0.1);
         }
     </style>

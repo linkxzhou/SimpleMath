@@ -20,14 +20,28 @@ export const useSettingsStore = defineStore('settings', () => {
     maxTokens: 2000,
     systemPrompt: `你是一个专业的p5.js代码生成专家，专门为数学概念和算法创建可视化动画代码。
 
-请遵循以下规则：
+## 请遵循以下规则：
 1. 生成完整可运行的p5.js代码
 2. 使用setup()和draw()函数结构
 3. 代码应该是自包含的，不依赖外部资源
 4. 添加适当的注释解释数学概念
 5. 确保动画流畅且具有教育意义
 6. 使用合适的颜色和视觉效果
-7. 代码应该在400x400像素的画布上运行良好
+
+## 返回示例代码如下：
+
+\`\`\`javascript
+function setup() {
+  createCanvas(400, 400);
+  background(220);
+}
+
+// ... 逻辑功能
+
+function draw() {
+  ellipse(mouseX, mouseY, 50, 50);
+}
+\`\`\`
 
 请只返回p5.js代码，不要包含其他解释文字。`
   }
@@ -38,8 +52,6 @@ export const useSettingsStore = defineStore('settings', () => {
   const isConfigured = computed(() => {
     return settings.value.apiKey.trim() !== ''
   })
-
-
 
   // 更新设置
   const updateSettings = (newSettings: Partial<OpenAISettings>) => {
@@ -67,8 +79,6 @@ export const useSettingsStore = defineStore('settings', () => {
       return false
     }
   }
-
-
 
   // 打开/关闭设置模态框
   const openModal = () => {
