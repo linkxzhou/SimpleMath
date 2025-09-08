@@ -24,6 +24,7 @@ export interface OpenAIResponse {
 export interface GenerateCodeRequest {
   prompt: string
   conversationHistory?: Message[]
+  systemPrompt?: string
 }
 
 export interface GenerateCodeResponse {
@@ -106,7 +107,7 @@ class OpenAIService {
       const messages: OpenAIMessage[] = [
         {
           role: 'system',
-          content: settings.systemPrompt
+          content: request.systemPrompt || settings.systemPrompt
         }
       ]
 
@@ -175,6 +176,16 @@ class OpenAIService {
         error: error instanceof Error ? error.message : '未知错误'
       }
     }
+  }
+
+  async generateResponse(messages: OpenAIMessage[]): Promise<string> {
+    const response = await this.makeRequest(messages)
+    
+    if (!response.choices || response.choices.length === 0) {
+      throw new Error('OpenAI API返回了空的响应')
+    }
+
+    return response.choices[0].message.content
   }
 
   async testConnection(): Promise<{ success: boolean; error?: string }> {

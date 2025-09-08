@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { ref, computed, nextTick, onMounted } from 'vue'
-import { Send, Loader2, MessageSquare, Trash2 } from 'lucide-vue-next'
+import { Send, Loader2, MessageSquare, Trash2, CheckCircle, Clock } from 'lucide-vue-next'
 import { useConversationStore } from '@/stores/conversation'
 import { useSettingsStore } from '@/stores/settings'
 import { useP5Store } from '@/stores/p5'
@@ -11,14 +11,20 @@ const conversationStore = useConversationStore()
 const settingsStore = useSettingsStore()
 const p5Store = useP5Store()
 
+// 进度指示器相关
+const roundNames = {
+  1: '需求分析',
+  2: '技术评估', 
+  3: '代码生成'
+}
+
 const messageInput = ref('')
 const messagesContainer = ref<HTMLElement>()
-const isSubmitting = ref(false)
 
 // 计算属性
 const canSend = computed(() => {
   return messageInput.value.trim() !== '' && 
-         !isSubmitting.value && 
+         !conversationStore.isLoading && 
          settingsStore.isConfigured
 })
 
@@ -26,6 +32,7 @@ const placeholder = computed(() => {
   if (!settingsStore.isConfigured) {
     return '请先在设置中配置OpenAI API密钥...'
   }
+  
   return '描述你想要的数学动画效果，例如："展示傅里叶变换"、"可视化冒泡排序算法"...'
 })
 
@@ -43,53 +50,12 @@ const sendMessage = async () => {
   
   const userMessage = messageInput.value.trim()
   messageInput.value = ''
-  isSubmitting.value = true
-  conversationStore.isTyping = true
   
   try {
-    // 添加用户消息
-    conversationStore.addMessage({
-      role: 'user',
-      content: userMessage
-    })
-    
+    await conversationStore.sendMessage(userMessage)
     await scrollToBottom()
-    
-    // 调用OpenAI API
-    const response = await openaiService.generateCode({
-      prompt: userMessage,
-      conversationHistory: conversationStore.currentMessages
-    })
-    
-    if (response.success) {
-      // 添加AI回复
-      const assistantMessage = conversationStore.addMessage({
-        role: 'assistant',
-        content: response.explanation || '代码已生成',
-        generatedCode: response.code
-      })
-      
-      // 如果有代码，自动运行
-      if (response.code) {
-        await p5Store.createAnimation(response.code)
-      }
-    } else {
-      // 添加错误消息
-      conversationStore.addMessage({
-        role: 'assistant',
-        content: `抱歉，生成代码时出现错误：${response.error}`
-      })
-    }
   } catch (error) {
     console.error('Send message error:', error)
-    conversationStore.addMessage({
-      role: 'assistant',
-      content: `发送消息时出现错误：${error instanceof Error ? error.message : '未知错误'}`
-    })
-  } finally {
-    isSubmitting.value = false
-    conversationStore.isTyping = false
-    await scrollToBottom()
   }
 }
 
@@ -134,9 +100,9 @@ onMounted(() => {
         <div class="flex items-center space-x-2">
           <MessageSquare class="w-5 h-5 text-gray-600" />
           <h2 class="font-semibold text-gray-800">AI 对话</h2>
-          <span v-if="conversationStore.currentMessages.length > 0" 
+          <span v-if="conversationStore.currentConversation?.messages.length" 
                 class="text-sm text-gray-500">
-            ({{ conversationStore.currentMessages.length }} 条消息)
+            ({{ conversationStore.currentConversation.messages.length }} 条消息)
           </span>
         </div>
         
@@ -158,6 +124,8 @@ onMounted(() => {
           </button>
         </div>
       </div>
+      
+
     </div>
     
     <!-- 消息列表 -->
@@ -166,7 +134,7 @@ onMounted(() => {
       class="flex-1 overflow-y-auto p-4 space-y-4"
     >
       <!-- 欢迎消息 -->
-      <div v-if="!conversationStore.hasMessages" class="text-center py-8">
+      <div v-if="!conversationStore.currentConversation?.messages.length" class="text-center py-8">
         <div class="w-16 h-16 mx-auto mb-4 bg-blue-100 rounded-full flex items-center justify-center">
           <MessageSquare class="w-8 h-8 text-blue-600" />
         </div>
@@ -187,14 +155,92 @@ onMounted(() => {
       
       <!-- 消息列表 -->
       <MessageItem
-        v-for="message in conversationStore.currentMessages"
+        v-for="message in conversationStore.currentConversation?.messages || []"
         :key="message.id"
         :message="message"
         @run-code="runCode"
       />
       
+      <!-- 进度指示器 -->
+      <div v-if="conversationStore.processingStatus.isProcessing && conversationStore.processingStatus.currentRound > 0" class="bg-blue-50 border border-blue-200 rounded-lg p-4 mb-4">
+        <div class="flex items-center justify-between mb-3">
+          <h4 class="font-medium text-blue-800">AI处理进度</h4>
+          <div class="text-sm text-blue-600">
+            {{ conversationStore.processingStatus.currentRound }}/3 轮
+          </div>
+        </div>
+        
+        <!-- 进度条 -->
+        <div class="w-full bg-blue-100 rounded-full h-2 mb-4">
+          <div 
+            class="bg-blue-500 h-2 rounded-full transition-all duration-300"
+            :style="{ width: `${(conversationStore.processingStatus.currentRound / 3) * 100}%` }"
+          ></div>
+        </div>
+        
+        <!-- 轮次状态 -->
+        <div class="space-y-2">
+          <div 
+            v-for="round in 3" 
+            :key="round"
+            class="flex items-center space-x-3 p-2 rounded-md"
+            :class="{
+              'bg-green-50 border border-green-200': conversationStore.processingStatus.completedRounds.includes(round),
+              'bg-blue-50 border border-blue-200': conversationStore.processingStatus.currentRound === round,
+              'bg-gray-50 border border-gray-200': conversationStore.processingStatus.currentRound < round
+            }"
+          >
+            <!-- 状态图标 -->
+            <div class="flex-shrink-0">
+              <CheckCircle 
+                v-if="conversationStore.processingStatus.completedRounds.includes(round)"
+                class="w-5 h-5 text-green-600"
+              />
+              <Loader2 
+                v-else-if="conversationStore.processingStatus.currentRound === round"
+                class="w-5 h-5 text-blue-600 animate-spin"
+              />
+              <Clock 
+                v-else
+                class="w-5 h-5 text-gray-400"
+              />
+            </div>
+            
+            <!-- 轮次信息 -->
+            <div class="flex-1">
+              <div class="font-medium text-sm"
+                   :class="{
+                     'text-green-700': conversationStore.processingStatus.completedRounds.includes(round),
+                     'text-blue-700': conversationStore.processingStatus.currentRound === round,
+                     'text-gray-500': conversationStore.processingStatus.currentRound < round
+                   }">
+                第{{ round }}轮：{{ roundNames[round] }}
+              </div>
+              
+              <!-- 状态文本 -->
+              <div class="text-xs mt-1"
+                   :class="{
+                     'text-green-600': conversationStore.processingStatus.completedRounds.includes(round),
+                     'text-blue-600': conversationStore.processingStatus.currentRound === round,
+                     'text-gray-400': conversationStore.processingStatus.currentRound < round
+                   }">
+                <span v-if="conversationStore.processingStatus.completedRounds.includes(round)">
+                  已完成
+                </span>
+                <span v-else-if="conversationStore.processingStatus.currentRound === round">
+                  正在处理...
+                </span>
+                <span v-else>
+                  等待中
+                </span>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+      
       <!-- 输入状态指示器 -->
-      <div v-if="conversationStore.isTyping" class="flex items-center space-x-2 text-gray-500">
+      <div v-if="conversationStore.isLoading && !conversationStore.processingStatus.isProcessing" class="flex items-center space-x-2 text-gray-500">
         <Loader2 class="w-4 h-4 animate-spin" />
         <span class="text-sm">AI正在思考...</span>
       </div>
@@ -214,7 +260,7 @@ onMounted(() => {
         <textarea
           v-model="messageInput"
           :placeholder="placeholder"
-          :disabled="!settingsStore.isConfigured || isSubmitting"
+          :disabled="!settingsStore.isConfigured || conversationStore.isLoading"
           @keydown="handleKeydown"
           class="w-full px-3 py-2 pr-12 border border-gray-300 rounded-lg resize-none focus:ring-2 focus:ring-blue-500 focus:border-transparent disabled:bg-gray-100 disabled:cursor-not-allowed"
           rows="2"
@@ -225,7 +271,7 @@ onMounted(() => {
           :disabled="!canSend"
           class="absolute bottom-4 right-2 px-2 py-1 bg-blue-600 text-white rounded-md hover:bg-blue-700 disabled:bg-gray-300 disabled:cursor-not-allowed transition-colors flex items-center justify-center min-w-[32px] min-h-[32px]"
         >
-          <Loader2 v-if="isSubmitting" class="w-3 h-3 animate-spin" />
+          <Loader2 v-if="conversationStore.isLoading" class="w-3 h-3 animate-spin" />
           <Send v-else class="w-3 h-3" />
         </button>
       </div>
