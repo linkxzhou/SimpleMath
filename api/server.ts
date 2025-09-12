@@ -49,28 +49,253 @@ function generateHTML(code: string, width: number = 800, height: number = 800): 
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>p5.js Animation</title>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/p5.js/1.7.0/p5.min.js"></script>
+    <script src="https://cdn.bootcdn.net/ajax/libs/gif.js/0.2.0/gif.js"></script>
     <style>
         body {
             margin: 0;
-            display: flex;
-            justify-content: center;
-            align-items: center;
-            min-height: 100vh;
+            padding: 0;
             background-color: #f0f0f0;
             font-family: Arial, sans-serif;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            min-height: 100vh;
+        }
+        .controls {
+            background: #fff;
+            border: 1px solid #ddd;
+            border-bottom: none;
+            padding: 10px;
+            display: flex;
+            gap: 8px;
+            align-items: center;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+            width: ${width}px;
+            box-sizing: border-box;
+        }
+        .control-btn {
+            background: #dbeafe;
+            color: #1d4ed8;
+            border: none;
+            padding: 6px 12px;
+            border-radius: 6px;
+            cursor: pointer;
+            font-size: 12px;
+            transition: all 0.2s;
+            font-weight: 500;
+        }
+        .control-btn:hover {
+            background: #bfdbfe;
+        }
+        .control-btn:disabled {
+            background: #f3f4f6;
+            color: #9ca3af;
+            cursor: not-allowed;
+        }
+        .control-btn.active {
+            background: #dc2626;
+            color: white;
+        }
+        .control-btn.active:hover {
+            background: #b91c1c;
+        }
+        .status {
+            font-size: 12px;
+            color: #666;
+            margin-left: auto;
         }
         main {
-            border: 1px solid #ccc;
+            border: 1px solid #ddd;
+            border-top: none;
             box-shadow: 0 4px 8px rgba(0,0,0,0.1);
+        }
+        .container {
+            display: flex;
+            flex-direction: column;
+            margin-top: 20px;
         }
     </style>
 </head>
 <body>
-    <main></main>
+    <div class="container">
+        <div class="controls">
+            <button id="playPauseBtn" class="control-btn">⏸️ 暂停</button>
+            <button id="resetBtn" class="control-btn">🔄 重置</button>
+            <button id="recordBtn" class="control-btn">🔴 录制</button>
+            <button id="downloadBtn" class="control-btn" disabled>💾 下载</button>
+            <div class="status" id="status">运行中</div>
+        </div>
+        <main></main>
+    </div>
     <script>
         // 设置默认画布尺寸
         const DEFAULT_WIDTH = ${width};
         const DEFAULT_HEIGHT = ${height};
+        
+        // 动画控制变量
+        let isPlaying = true;
+        let isRecording = false;
+        let gif = null;
+        let recordingFrames = [];
+        let frameCount = 0;
+        let gifLibLoaded = false;
+        
+        // 检查gif.js库是否加载成功
+        function checkGifLibrary() {
+          if (typeof GIF !== 'undefined') {
+            gifLibLoaded = true;
+            console.log('GIF library loaded successfully');
+          } else {
+            console.error('GIF library failed to load');
+            // 禁用录制按钮
+            const recordBtn = document.getElementById('recordBtn');
+            const downloadBtn = document.getElementById('downloadBtn');
+            if (recordBtn) {
+              recordBtn.disabled = true;
+              recordBtn.textContent = '录制不可用';
+              recordBtn.style.backgroundColor = '#ccc';
+            }
+            if (downloadBtn) {
+              downloadBtn.disabled = true;
+              downloadBtn.style.backgroundColor = '#ccc';
+            }
+          }
+        }
+        
+        // 页面加载完成后检查库
+        window.addEventListener('load', function() {
+          setTimeout(checkGifLibrary, 100);
+        });
+        
+        // 获取控制按钮
+        const playPauseBtn = document.getElementById('playPauseBtn');
+        const resetBtn = document.getElementById('resetBtn');
+        const recordBtn = document.getElementById('recordBtn');
+        const downloadBtn = document.getElementById('downloadBtn');
+        const status = document.getElementById('status');
+        
+        // 播放/暂停控制
+        playPauseBtn.addEventListener('click', () => {
+            if (isPlaying) {
+                noLoop();
+                playPauseBtn.textContent = '▶️ 播放';
+                status.textContent = '已暂停';
+            } else {
+                loop();
+                playPauseBtn.textContent = '⏸️ 暂停';
+                status.textContent = '运行中';
+            }
+            isPlaying = !isPlaying;
+        });
+        
+        // 重置动画
+        resetBtn.addEventListener('click', () => {
+            if (typeof setup === 'function') {
+                setup();
+                if (!isPlaying) {
+                    redraw();
+                }
+            }
+            frameCount = 0;
+            status.textContent = isPlaying ? '运行中' : '已暂停';
+        });
+        
+        // 录制控制
+        recordBtn.addEventListener('click', () => {
+            if (!isRecording) {
+                startRecording();
+            } else {
+                stopRecording();
+            }
+        });
+        
+        // 下载录制的GIF
+        downloadBtn.addEventListener('click', () => {
+            if (gif) {
+                gif.render();
+            }
+        });
+        
+        // 开始录制
+        function startRecording() {
+            if (isRecording || !gifLibLoaded) return;
+            
+            try {
+                isRecording = true;
+                recordBtn.textContent = '⏹️ 停止';
+                recordBtn.classList.add('active');
+                status.textContent = '录制中...';
+                downloadBtn.disabled = true;
+                
+                gif = new GIF({
+                    workers: 2,
+                    quality: 10,
+                    width: DEFAULT_WIDTH,
+                    height: DEFAULT_HEIGHT
+                });
+                
+                gif.on('finished', function(blob) {
+                    const url = URL.createObjectURL(blob);
+                    const a = document.createElement('a');
+                    a.href = url;
+                    a.download = 'animation.gif';
+                    a.click();
+                    URL.revokeObjectURL(url);
+                    downloadBtn.disabled = false;
+                    status.textContent = 'GIF已生成';
+                });
+                
+                recordingFrames = [];
+            } catch (error) {
+                console.error('Failed to start recording:', error);
+                status.textContent = '录制启动失败';
+            }
+        }
+        
+        // 停止录制
+        function stopRecording() {
+            if (!isRecording || !gif) return;
+            
+            try {
+                isRecording = false;
+                recordBtn.textContent = '🔴 录制';
+                recordBtn.classList.remove('active');
+                status.textContent = '处理中...';
+                
+                // 添加录制的帧到GIF
+                recordingFrames.forEach(frame => {
+                    if (gif && typeof gif.addFrame === 'function') {
+                        gif.addFrame(frame, {delay: 100});
+                    }
+                });
+                
+                if (gif && typeof gif.render === 'function') {
+                    gif.render();
+                } else {
+                    throw new Error('GIF object is not properly initialized');
+                }
+            } catch (error) {
+                console.error('Failed to stop recording:', error);
+                status.textContent = '录制失败';
+                isRecording = false;
+                recordBtn.textContent = '🔴 录制';
+                recordBtn.classList.remove('active');
+            }
+        }
+        
+        // 键盘快捷键
+        document.addEventListener('keydown', (e) => {
+            if (e.code === 'Space') {
+                e.preventDefault();
+                playPauseBtn.click();
+            } else if (e.code === 'KeyR') {
+                e.preventDefault();
+                resetBtn.click();
+            }
+        });
+        
+        // 保存原始的draw函数
+        let originalDraw = null;
         
         // 用户代码
         ${code}
@@ -81,6 +306,23 @@ function generateHTML(code: string, width: number = 800, height: number = 800): 
                 createCanvas(DEFAULT_WIDTH, DEFAULT_HEIGHT);
                 background(220);
             }
+        }
+        
+        // 包装draw函数以支持录制
+        if (typeof draw === 'function') {
+            originalDraw = draw;
+            window.draw = function() {
+                originalDraw();
+                
+                // 录制帧
+                if (isRecording && frameCount % 3 === 0) { // 每3帧录制一次以减少文件大小
+                    const canvas = document.querySelector('canvas');
+                    if (canvas) {
+                        recordingFrames.push(canvas);
+                    }
+                }
+                frameCount++;
+            };
         }
     </script>
 </body>
@@ -238,6 +480,7 @@ app.post('/v1/chat/completions', async (req, res) => {
     
     // 记录请求日志
     console.log(`OpenAI API call: ${response.status} - Model: ${body.model || 'unknown'} - URL: ${apiUrl}`)
+    console.log('OpenAI API body:', body)
     
     // 返回响应
     res.status(response.status).json(data)

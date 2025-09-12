@@ -1,10 +1,8 @@
 <script setup lang="ts">
-import { Settings, Github, Zap, Sun, Moon } from 'lucide-vue-next'
+import { Settings, Github, Zap } from 'lucide-vue-next'
 import { useSettingsStore } from '@/stores/settings'
-import { useTheme } from '@/composables/useTheme'
 
 const settingsStore = useSettingsStore()
-const { toggleTheme, isDark } = useTheme()
 
 const openSettings = () => {
   settingsStore.openModal()
@@ -12,14 +10,6 @@ const openSettings = () => {
 
 const openGithub = () => {
   window.open('https://github.com/linkxzhou/SimpleMath', '_blank')
-}
-
-const getThemeIcon = () => {
-  return isDark.value ? Moon : Sun
-}
-
-const getThemeTitle = () => {
-  return isDark.value ? '当前：深色主题' : '当前：浅色主题'
 }
 </script>
 
@@ -50,15 +40,6 @@ const getThemeTitle = () => {
           {{ settingsStore.isConfigured ? 'API已配置' : 'API未配置' }}
         </span>
       </div>
-      
-      <!-- 主题切换按钮 -->
-      <button
-        @click="toggleTheme"
-        class="p-2 hover:bg-blue-700 rounded-lg transition-colors duration-200"
-        :title="getThemeTitle()"
-      >
-        <component :is="getThemeIcon()" class="w-4 h-4 lg:w-5 lg:h-5" />
-      </button>
       
       <!-- GitHub链接 -->
       <button

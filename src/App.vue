@@ -5,7 +5,6 @@ import ChatPanel from '@/components/ChatPanel.vue'
 import AnimationPanel from '@/components/AnimationPanel.vue'
 import SettingsModal from '@/components/SettingsModal.vue'
 import { useSettingsStore } from '@/stores/settings'
-import { useTheme } from '@/composables/useTheme'
 
 const settingsStore = useSettingsStore()
 

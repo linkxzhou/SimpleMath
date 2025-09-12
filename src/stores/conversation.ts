@@ -50,11 +50,11 @@ export const useConversationStore = defineStore('conversation', () => {
     1: `你是一个专业的需求分析师，专门帮助用户分解和澄清数学动画需求。
 
 请仔细分析用户的需求，并：
-1. 识别核心的数学概念或算法
-2. 确定动画的关键视觉元素
-3. 明确交互需求（如果有）
-4. 提出可能的实现方案
-5. 询问需要澄清的细节
+1. 识别核心的数学概念或算法，如果没有选择默认
+2. 确定动画的关键视觉元素，如果没有输出默认
+3. 明确交互需求（如果有），如果没有输出默认
+4. 提出可能的实现方案，如果没有输出默认
+5. 询问需要澄清的细节，如果没有输出默认
 
 请用简洁明了的语言回复，帮助用户完善需求描述。`,
     
@@ -78,12 +78,18 @@ export const useConversationStore = defineStore('conversation', () => {
 4. 添加适当的注释解释数学概念
 5. 确保动画流畅且具有教育意义
 6. 使用合适的颜色和视觉效果
+7. **重要：画布尺寸将根据实际容器大小动态设置，请在createCanvas()中使用提供的尺寸参数**
+
+## 画布尺寸说明：
+- 如果系统提供了具体的宽度和高度参数，请在createCanvas()中使用这些精确值
+- 确保所有绘制元素都适配指定的画布尺寸
+- 坐标系统应基于提供的画布尺寸进行计算
 
 ## 返回示例代码如下：
 
 \`\`\`javascript
 function setup() {
-  createCanvas(400, 400);
+  createCanvas(600, 600); // 这里的尺寸会根据实际容器动态调整
   background(220);
 }
 
@@ -201,7 +207,7 @@ function draw() {
   }
 
   // 发送消息 - 单次调用中连续进行3轮处理，展示每轮状态
-  const sendMessage = async (content: string) => {
+  const sendMessage = async (content: string, dimensions?: { width: number, height: number }) => {
     if (!content.trim() || isLoading.value) return
     
     try {
@@ -261,7 +267,16 @@ function draw() {
         
         currentConversation.value!.messages.push(progressMessage)
         
-        const systemPrompt = systemPrompts[round as keyof typeof systemPrompts]
+        let systemPrompt = systemPrompts[round as keyof typeof systemPrompts]
+        
+        // 如果提供了尺寸信息，添加到系统提示词中
+        if (dimensions && round === 3) {
+          systemPrompt += `\n\n重要：请确保生成的p5.js代码使用以下画布尺寸：
+- 宽度：${dimensions.width}px
+- 高度：${dimensions.height}px
+
+在createCanvas()函数中使用这些精确的尺寸值。`
+        }
         
         // 调用OpenAI API
         const response = await openaiService.generateResponse([
@@ -335,7 +350,7 @@ function draw() {
         const code = extractP5Code(finalResponse)
         if (code) {
           const p5Store = useP5Store()
-          await p5Store.createAnimation(code, '生成的数学动画')
+          await p5Store.createAnimation(code, '生成的数学动画', dimensions)
         }
       }
       

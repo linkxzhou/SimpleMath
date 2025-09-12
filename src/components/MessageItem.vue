@@ -108,7 +108,7 @@ const runAnimation = async () => {
   
   try {
     isRunning.value = true
-    const success = await p5Store.createAnimation(code, '生成的数学动画', 400, 400)
+    const success = await p5Store.createAnimation(code, '生成的数学动画', { width: 400, height: 400 })
     if (!success) {
       console.error('创建动画失败')
     }

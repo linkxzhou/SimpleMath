@@ -1,27 +1,68 @@
 <script setup lang="ts">
-import { ref, onUnmounted } from 'vue'
+import { ref, onUnmounted, onMounted, nextTick, provide } from 'vue'
 import { Play, Code, ChevronDown, ChevronUp } from 'lucide-vue-next'
 import { useP5Store } from '@/stores/p5'
 import CodeEditor from '@/components/CodeEditor.vue'
 
 const p5Store = useP5Store()
 const showCodeEditor = ref(false)
+const animationContainer = ref<HTMLElement>()
+const containerDimensions = ref({ width: 600, height: 600 })
+
+// 获取容器尺寸
+const updateContainerDimensions = () => {
+  if (animationContainer.value) {
+    const rect = animationContainer.value.getBoundingClientRect()
+    console.log("rect", rect)
+    containerDimensions.value = {
+      width: Math.floor(rect.width) || 600,
+      height: Math.floor(rect.height) || 600
+    }
+  }
+}
+
+// 监听窗口大小变化
+const handleResize = () => {
+  updateContainerDimensions()
+}
+
+// 提供尺寸信息给子组件
+provide('animationDimensions', containerDimensions)
 
 // 清理
 onUnmounted(() => {
   p5Store.clearAnimation()
+  window.removeEventListener('resize', handleResize)
+})
+
+// 组件挂载后获取尺寸
+onMounted(() => {
+  nextTick(() => {
+    updateContainerDimensions()
+    window.addEventListener('resize', handleResize)
+  })
 })
 
 // 切换代码编辑器显示
 const toggleCodeEditor = () => {
   showCodeEditor.value = !showCodeEditor.value
+  // 代码编辑器显示/隐藏后重新计算尺寸
+  nextTick(() => {
+    updateContainerDimensions()
+  })
 }
 
 // 运行示例代码
 const runExample = async (type: string) => {
   const exampleCode = p5Store.getExampleCode(type)
-  await p5Store.createAnimation(exampleCode, `示例：${type}`)
+  await p5Store.createAnimation(exampleCode, `示例：${type}`, containerDimensions.value)
 }
+
+// 暴露尺寸信息
+defineExpose({
+  getDimensions: () => containerDimensions.value,
+  updateDimensions: updateContainerDimensions
+})
 </script>
 
 <template>
@@ -57,7 +98,7 @@ const runExample = async (type: string) => {
       <!-- 动画区域 -->
       <div class="flex-1 bg-gray-100 relative">
         <!-- iframe容器 -->
-        <div class="w-full h-full">
+        <div ref="animationContainer" class="w-full h-full">
           <!-- 空状态 -->
           <div v-if="!p5Store.hasAnimation && !p5Store.isLoading" 
                class="w-full h-full flex flex-col items-center justify-center text-gray-500">
@@ -103,7 +144,6 @@ const runExample = async (type: string) => {
               <p class="text-xs sm:text-sm text-gray-600">正在生成动画...</p>
             </div>
           </div>
-          
           <!-- 动画iframe -->
           <iframe 
             v-if="p5Store.animationUrl && !p5Store.isLoading"

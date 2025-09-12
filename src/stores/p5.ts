@@ -20,16 +20,41 @@ export const useP5Store = defineStore('p5', () => {
   // 后端API配置
   const API_BASE_URL = 'http://localhost:3001'
 
+  // 处理代码，确保使用正确的画布尺寸
+  const processCodeWithDimensions = (code: string, width: number, height: number): string => {
+    // 查找createCanvas调用并替换尺寸
+    const createCanvasRegex = /createCanvas\s*\(\s*\d+\s*,\s*\d+\s*\)/g
+    
+    // 替换所有createCanvas调用
+    let processedCode = code.replace(createCanvasRegex, `createCanvas(${width}, ${height})`)
+    
+    // 如果没有找到createCanvas，在setup函数中添加
+    if (!processedCode.includes('createCanvas')) {
+      const setupRegex = /(function\s+setup\s*\(\s*\)\s*\{)/
+      if (setupRegex.test(processedCode)) {
+        processedCode = processedCode.replace(setupRegex, `$1\n  createCanvas(${width}, ${height});`)
+      }
+    }
+    
+    return processedCode
+  }
+
   // 计算属性
   const hasAnimation = computed(() => currentAnimation.value !== null)
   const hasError = computed(() => error.value !== null)
   const isReady = computed(() => !isLoading.value && !hasError.value)
 
   // 创建动画
-  const createAnimation = async (code: string, title?: string, width: number = 400, height: number = 400) => {
+  const createAnimation = async (code: string, title?: string, dimensions?: { width: number, height: number }) => {
+    // 使用传入的尺寸或默认值
+    const width = dimensions?.width || 400
+    const height = dimensions?.height || 400
     try {
       isLoading.value = true
       error.value = null
+      
+      // 处理代码，确保使用正确的画布尺寸
+      const processedCode = processCodeWithDimensions(code, width, height)
       
       // 调用后端API创建动画
       const response = await fetch(`${API_BASE_URL}/api/p5/create`, {
@@ -38,7 +63,7 @@ export const useP5Store = defineStore('p5', () => {
           'Content-Type': 'application/json',
         },
         body: JSON.stringify({
-          code,
+          code: processedCode,
           title,
           width,
           height
@@ -59,7 +84,7 @@ export const useP5Store = defineStore('p5', () => {
       currentAnimation.value = {
         id: result.id,
         url: result.url,
-        code,
+        code: processedCode,
         title,
         width,
         height

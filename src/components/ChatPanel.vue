@@ -1,15 +1,17 @@
 <script setup lang="ts">
-import { ref, computed, nextTick, onMounted } from 'vue'
+import { ref, computed, nextTick, onMounted, inject } from 'vue'
 import { Send, Loader2, MessageSquare, Trash2, CheckCircle, Clock } from 'lucide-vue-next'
 import { useConversationStore } from '@/stores/conversation'
 import { useSettingsStore } from '@/stores/settings'
 import { useP5Store } from '@/stores/p5'
-import { openaiService } from '@/services/openai'
 import MessageItem from '@/components/MessageItem.vue'
 
 const conversationStore = useConversationStore()
 const settingsStore = useSettingsStore()
 const p5Store = useP5Store()
+
+// 注入动画容器尺寸信息
+const animationDimensions = inject('animationDimensions', ref({ width: 600, height: 600 }))
 
 // 进度指示器相关
 const roundNames = {
@@ -52,7 +54,8 @@ const sendMessage = async () => {
   messageInput.value = ''
   
   try {
-    await conversationStore.sendMessage(userMessage)
+    // 传递当前动画容器的尺寸信息
+    await conversationStore.sendMessage(userMessage, animationDimensions.value)
     await scrollToBottom()
   } catch (error) {
     console.error('Send message error:', error)
